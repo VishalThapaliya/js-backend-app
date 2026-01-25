@@ -7,6 +7,8 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
         const user = await User.findById(userId);
+        console.log("User in GAARTF: ", user);
+        
         const accessToken = user.generateAccessToken();
         const refreshToken = user.generateRefreshToken();
 
@@ -84,7 +86,7 @@ export const registerUser = asyncHandler( async (req, res) => {
 
 export const loginUser = asyncHandler( async (req, res) => {
     // get data from req.body
-    const { email, username, password } = req.body();
+    const { email, username, password } = req.body;
 
     // check if username or email exists
     if (!(username || email)) {
@@ -92,25 +94,27 @@ export const loginUser = asyncHandler( async (req, res) => {
     }
 
     // find the user
-    const registeredUser = await User.findOne({
+    const user = await User.findOne({
         $or: [{ username }, { email }]
     });
 
-    if(!registeredUser) {
+    if(!user) {
         throw new ApiError(404, "User does not exists")
     }
     
     // password check
-    const isPasswordValid = await registeredUser.isPasswordCorrect(password);
+    const isPasswordValid = await user.isPasswordCorrect(password);
 
     if(!isPasswordValid) {
         throw new ApiError(401, "Invalid user credentials")
     }
 
+    console.log("User Object: ", user);
+
     // access and refresh token
-    const { accessToken, refreshToken} = generateAccessAndRefreshTokens(registeredUser._id);
+    const { accessToken, refreshToken} = await generateAccessAndRefreshTokens(user._id);
     
-    const loggedInUser = await User.findById(registeredUser._id).select("-password -refreshToken");
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
     const options = {
         httpOnly: true,
@@ -157,4 +161,4 @@ export const logoutUser = asyncHandler( async(req, res) => {
     .clearCookie("accessToken", options)
     .clearCookie("refreshToken", options)
     .json(new ApiResponse(200, {}, "User Logged Out Successfully!!!"))
-});
+}); 
