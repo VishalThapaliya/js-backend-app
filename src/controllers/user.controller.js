@@ -226,7 +226,7 @@ export const updateCurrentPassword = asyncHandler( async (req, res) => {
 });
 
 export const getCurrentUser = asyncHandler( async (req, res) => {
-    return res.status(200).json(200, req.user, "Current user fetched successfully")
+    return res.status(200).json(new ApiResponse(200, req.user, "Current user fetched successfully"))
 });
 
 export const updateAccountDetails = asyncHandler( async (req, res) => {
@@ -251,7 +251,7 @@ export const updateAccountDetails = asyncHandler( async (req, res) => {
 
     return res
     .status(200)
-    .json(new ApiResponse(200, user, "Account details updated successfully"));
+    .json(new ApiResponse(200, updatedUser, "Account details updated successfully"));
 });
 
 export const updateUserAvatar = asyncHandler( async (req, res) => {
@@ -306,4 +306,74 @@ export const updateUserCoverImage = asyncHandler( async (req, res) => {
     ).select("-password");
 
     return res.status(200).json(new ApiResponse(200, updatedCoverImage, "Cover image updated successfully"));
+});
+
+export const getUserChannelProfile = asyncHandler( async (req, res) => {
+    const { username } = req.params;
+
+    if(!username) {
+        throw new ApiError(400, "Username is missing");
+    }
+
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        {
+          $lookup: {
+            from: "subscriptions",
+            localField: "_id",
+            foreignField: "subscriber",
+            as: "subscribedTo"
+          }  
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscribers"
+                },
+                channleSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subsribers.subscriber"]},
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullName: 1,
+                username: 1,
+                email: 1,
+                avatar: 1,
+                coverImage: 1,
+                subscribersCount: 1,
+                channleSubscribedToCount: 1,
+                isSubscribed: 1
+            }
+        }
+    ]);
+
+    console.log("Aggregated channel pipeline: ", channel);
+
+    if(!channel?.length) {
+        throw new ApiError(404, "Channel does not exists");
+    }
+
+    return res.status(200).json(new ApiResponse(200, channel[0], "User channel fetched successfully"))
+
 });
